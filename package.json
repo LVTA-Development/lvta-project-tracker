@@ -1,0 +1,12 @@
+{
+  "name": "lvta-project-tracker",
+  "private": true,
+  "description": "LVTA website project tracker. src/ is plaintext and stays local; docs/ is the password-encrypted page published on GitHub Pages.",
+  "scripts": {
+    "build": "python3 build.py",
+    "publish": "python3 build.py && bash encrypt.sh"
+  },
+  "devDependencies": {
+    "staticrypt": "3.5.4"
+  }
+}
