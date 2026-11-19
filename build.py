@@ -16,6 +16,11 @@ from data import (  # noqa: E402
 )
 
 UPDATED = "November 19, 2026"
+SITE = os.path.join(HERE, "..", "lvta-website")
+b64 = lambda f: __import__("base64").b64encode(open(os.path.join(SITE, f), "rb").read()).decode()
+FONT_DISPLAY = b64("app/fonts/archivo-latin.woff2")
+FONT_BODY = b64("app/fonts/inter-latin.woff2")
+LOGO = b64("public/media/lvta-logo.png")
 STAGING = "https://lvta-website-staging.vercel.app"
 e = html.escape
 
@@ -32,15 +37,25 @@ work_rows = "".join(
     for d, r, a, w, s, sc in reversed(WORK)
 )
 dec_cards = "".join(
-    f"<div class=dec><div class=dec-n>{i}</div><div><div class=dec-t>{e(t)}</div><p>{e(c)}</p></div><div class=who>{e(o)}</div></div>"
+    f"<div class=dec><div class=dec-n>{i:02d}</div><div><div class=dec-t>{e(t)}</div><p>{e(c)}</p></div><div class=who>{e(o)}</div></div>"
     for i, (t, c, o) in enumerate(DECISIONS, 1)
 )
-tree = "".join(
-    f"<div class=branch><div class=area>{e(a)}<span class=count>{len(v)} version{'s' if len(v) > 1 else ''}</span></div><ol>"
-    + "".join(f"<li><span class=td>{e(d)}</span><span>{e(t)}</span></li>" for d, t in v)
-    + "</ol></div>"
-    for a, v in TREE
-)
+def lane(area, versions):
+    steps = []
+    for i, (d, t) in enumerate(versions):
+        now = i == len(versions) - 1
+        steps.append(
+            f"<li class='step{' now' if now else ''}'>"
+            f"<div class=step-date>{e(d)}</div><div class=step-text>{e(t)}</div>"
+            + ("<div class=now-tag>Live now</div>" if now else "")
+            + "</li>"
+        )
+    n = len(versions)
+    return (f"<div class=lane><div class=lane-head><h3>{e(area)}</h3>"
+            f"<span class=lane-count>{n} version{'s' if n > 1 else ''}</span></div>"
+            f"<ol class=steps>{''.join(steps)}</ol></div>")
+
+tree = "".join(lane(a, v) for a, v in TREE)
 hidden = "".join(f"<li><b>{e(a)}</b> {e(b)}</li>" for a, b in HIDDEN_LIST)
 sow_todo = "".join(f"<li><b>{e(a)}</b> {e(b)}</li>" for a, b in SOW_TODO)
 sow_out = "".join(f"<li>{e(x)}</li>" for x in SOW_OUT)
@@ -55,75 +70,142 @@ page = f"""<!doctype html><html lang=en><head><meta charset=utf-8>
 <meta name=robots content="noindex, nofollow">
 <title>LVTA Website: Project Tracker</title>
 <style>
-:root {{ --navy:#1c2f6e; --crimson:#9b1b2e; --gold:#b8893b; --ink:#1d1d22; --muted:#66666f; --line:#e4e4ea; --soft:#f7f6f2; }}
+@font-face {{ font-family:"Archivo"; src:url(data:font/woff2;base64,{FONT_DISPLAY}) format("woff2"); font-weight:400 600; font-display:swap; }}
+@font-face {{ font-family:"Inter"; src:url(data:font/woff2;base64,{FONT_BODY}) format("woff2"); font-weight:100 900; font-display:swap; }}
+:root {{ --navy:#1c2f6e; --crimson:#9b1b2e; --crimson-deep:#7a1323; --gold:#b8893b; --gold-lt:#f0b45a; --cream:#f6d7a0;
+  --stage:#0c0709; --ink:#1d1d22; --muted:#6b6b75; --line:#e7e2d6; --paper:#faf8f3; }}
 * {{ box-sizing:border-box; }}
-body {{ margin:0; font:15px/1.5 -apple-system,"Helvetica Neue",Arial,sans-serif; color:var(--ink); background:#fff; }}
-header.top {{ border-top:5px solid var(--crimson); background:var(--soft); }}
-.wrap {{ max-width:1180px; margin:0 auto; padding:0 24px; }}
-.top .wrap {{ padding-top:28px; padding-bottom:0; }}
-h1 {{ margin:0; color:var(--navy); font-size:30px; letter-spacing:-0.01em; }}
-.sub {{ color:var(--muted); margin:6px 0 18px; font-size:14px; }}
-.sub a {{ color:var(--navy); }}
-nav.tabs {{ display:flex; gap:4px; overflow-x:auto; }}
-nav.tabs a {{ padding:10px 16px; text-decoration:none; color:var(--muted); font-weight:600; font-size:14px; border-bottom:3px solid transparent; white-space:nowrap; }}
-nav.tabs a.on {{ color:var(--navy); border-color:var(--gold); }}
-main {{ padding:32px 24px 60px; }}
+body {{ margin:0; font:15px/1.55 "Inter",-apple-system,sans-serif; color:var(--ink); background:var(--paper); }}
+.display {{ font-family:"Archivo",sans-serif; }}
+.label {{ font-family:"Archivo",sans-serif; font-size:11.5px; letter-spacing:.22em; text-transform:uppercase; font-weight:500; }}
+.wrap {{ max-width:1200px; margin:0 auto; padding:0 28px; }}
+
+/* The stage */
+header.stage {{ position:relative; isolation:isolate; overflow:hidden; background:var(--stage); color:#fff; }}
+header.stage::before {{ content:""; position:absolute; inset:0; z-index:-1;
+  background:radial-gradient(ellipse 55% 70% at 50% 0%,rgba(240,180,90,.24),transparent 72%),
+    linear-gradient(90deg,rgba(74,12,24,.75),transparent 16%,transparent 84%,rgba(74,12,24,.75)); }}
+header.stage::after {{ content:""; position:absolute; inset:0; z-index:-1; opacity:.5;
+  background:repeating-linear-gradient(90deg,rgba(155,27,46,.16) 0 2px,transparent 2px 54px);
+  -webkit-mask-image:linear-gradient(180deg,#000,transparent 80%); mask-image:linear-gradient(180deg,#000,transparent 80%); }}
+.stage .wrap {{ padding-top:30px; }}
+.brandbar {{ display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; }}
+.brandbar img {{ height:46px; filter:brightness(0) invert(1); }}
+.brandbar a.site {{ color:var(--cream); text-decoration:none; border:1px solid rgba(184,137,59,.55); border-radius:999px; padding:7px 16px; }}
+.brandbar a.site:hover {{ background:rgba(184,137,59,.15); }}
+.hero {{ text-align:center; padding:34px 0 26px; }}
+.hero .label {{ color:var(--gold-lt); }}
+.hero h1 {{ font-family:"Archivo",sans-serif; font-weight:300; text-transform:uppercase; letter-spacing:.05em; line-height:1;
+  font-size:clamp(34px,6vw,68px); margin:12px 0 0; text-shadow:0 0 50px rgba(240,180,90,.35); }}
+.ornament {{ display:flex; align-items:center; justify-content:center; gap:10px; margin:16px 0 0; }}
+.ornament i {{ display:block; height:1px; width:56px; background:rgba(184,137,59,.7); }}
+.ornament b {{ display:block; width:6px; height:6px; transform:rotate(45deg); background:var(--gold); }}
+.hero p {{ color:rgba(255,255,255,.62); margin:14px 0 0; font-size:14px; }}
+nav.tabs {{ display:flex; justify-content:center; gap:4px; overflow-x:auto; border-top:1px solid rgba(255,255,255,.1); }}
+nav.tabs a {{ padding:15px 16px 13px; text-decoration:none; color:rgba(255,255,255,.62); border-bottom:2px solid transparent; white-space:nowrap; }}
+nav.tabs a:hover {{ color:#fff; }}
+nav.tabs a.on {{ color:var(--cream); border-color:var(--gold-lt); }}
+header.stage .floor {{ height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent); }}
+
+main {{ padding:40px 28px 70px; }}
 section.tab {{ display:none; }} section.tab.on {{ display:block; }}
-h2 {{ color:var(--navy); margin:0 0 6px; font-size:22px; }}
-h3 {{ color:var(--navy); margin:0 0 8px; font-size:16px; }}
-.lead {{ color:var(--muted); margin:0 0 18px; max-width:820px; }}
-.stats {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin:0 0 24px; }}
-.stat {{ border:1px solid #e8dcc0; border-radius:10px; padding:14px; background:#fbf8f1; }}
-.num {{ font-size:28px; font-weight:700; color:var(--crimson); }} .lab {{ color:var(--muted); font-size:13px; }}
-.grid2 {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:18px; }}
-.box {{ border:1px solid var(--line); border-radius:10px; padding:18px 20px; }}
-.box ul {{ margin:0; padding-left:18px; }} .box li {{ margin:4px 0; }}
-.bars {{ display:flex; height:12px; border-radius:6px; overflow:hidden; margin:10px 0 6px; }}
+.sec-head {{ margin:0 0 20px; }}
+.sec-head .label {{ color:var(--crimson); }}
+h2 {{ font-family:"Archivo",sans-serif; font-weight:400; font-size:30px; letter-spacing:-.005em; color:var(--ink); margin:6px 0 6px; }}
+h3 {{ font-family:"Archivo",sans-serif; color:var(--ink); margin:0 0 10px; font-size:16px; font-weight:600; }}
+.lead {{ color:var(--muted); margin:0; max-width:780px; }}
+a {{ color:var(--crimson); }}
+
+.stats {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin:0 0 26px; }}
+.stat {{ background:#fff; border:1px solid var(--line); border-top:3px solid var(--gold); border-radius:10px; padding:16px; }}
+.num {{ font-family:"Archivo",sans-serif; font-size:32px; font-weight:500; color:var(--crimson); line-height:1.1; }}
+.lab {{ color:var(--muted); font-size:13px; margin-top:4px; }}
+.grid2 {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:18px; }}
+.box {{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:22px 24px; }}
+.box ul {{ margin:0; padding-left:18px; }} .box li {{ margin:5px 0; }} .box li::marker {{ color:var(--gold); }}
+.box.dark {{ background:var(--stage); color:rgba(255,255,255,.82); border-color:#2a1d16;
+  background-image:radial-gradient(ellipse 70% 60% at 50% 0%,rgba(240,180,90,.16),transparent 70%); }}
+.box.dark h3 {{ color:var(--cream); }} .box.dark b {{ color:#fff; }} .box.dark .muted {{ color:rgba(255,255,255,.55); }}
+.bars {{ display:flex; height:12px; border-radius:6px; overflow:hidden; margin:12px 0 8px; }}
 .bars span {{ display:block; }}
 .bars .in, .key .in {{ background:#3f9a62; }} .bars .rev, .key .rev {{ background:#d9a03a; }} .bars .out, .key .out {{ background:var(--crimson); }}
-.key {{ display:flex; flex-wrap:wrap; gap:12px; font-size:13px; color:var(--muted); }}
-.key i {{ display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }}
-.pill {{ display:inline-block; padding:2px 9px; border-radius:10px; font-size:12px; font-weight:600; white-space:nowrap; }}
+.key {{ display:flex; flex-wrap:wrap; gap:14px; font-size:13px; color:var(--muted); }}
+.key i {{ display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:6px; vertical-align:-1px; }}
+
+.pill {{ display:inline-block; padding:2px 10px; border-radius:999px; font-size:12px; font-weight:600; white-space:nowrap; }}
 .live,.in {{ background:#e3f3e8; color:#17663a; }} .hidden,.rev {{ background:#fdf0d8; color:#8a5a00; }}
 .admin {{ background:#e5ebfb; color:#1c3f9e; }} .behind {{ background:#ececf0; color:#4a4a55; }}
 .old {{ background:#f3e6f7; color:#6a2380; }} .out {{ background:#fbe3e6; color:var(--crimson); }}
 .filters {{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:0 0 8px; font-size:13px; color:var(--muted); }}
-.filters button {{ border:1px solid var(--line); background:#fff; border-radius:16px; padding:4px 11px; font:inherit; color:var(--ink); cursor:pointer; }}
+.filters .label {{ width:62px; font-size:10.5px; }}
+.filters button {{ border:1px solid var(--line); background:#fff; border-radius:999px; padding:5px 12px; font:inherit; color:var(--ink); cursor:pointer; }}
 .filters button span {{ color:var(--muted); }}
-.filters button.on {{ background:var(--navy); border-color:var(--navy); color:#fff; }} .filters button.on span {{ color:#cfd6f0; }}
-input.search {{ border:1px solid var(--line); border-radius:8px; padding:7px 11px; font:inherit; width:260px; max-width:100%; margin:0 0 12px; }}
-.table {{ overflow-x:auto; border:1px solid var(--line); border-radius:10px; }}
+.filters button.on {{ background:var(--crimson); border-color:var(--crimson); color:#fff; }} .filters button.on span {{ color:#f3c9cf; }}
+input.search {{ border:1px solid var(--line); border-radius:999px; padding:8px 16px; font:inherit; width:280px; max-width:100%; margin:6px 0 14px; background:#fff; }}
+.table {{ overflow-x:auto; border:1px solid var(--line); border-radius:12px; background:#fff; }}
 table {{ width:100%; border-collapse:collapse; font-size:14px; }}
-th {{ text-align:left; background:var(--navy); color:#fff; padding:9px 10px; font-weight:600; position:sticky; top:0; }}
-td {{ padding:8px 10px; border-top:1px solid var(--line); vertical-align:top; }}
-tr:nth-child(even) td {{ background:#fafafc; }}
+th {{ text-align:left; background:var(--stage); color:var(--cream); padding:11px 12px; font-family:"Archivo",sans-serif; font-weight:500;
+  font-size:11px; letter-spacing:.18em; text-transform:uppercase; }}
+td {{ padding:9px 12px; border-top:1px solid var(--line); vertical-align:top; }}
+tr:nth-child(even) td {{ background:#fcfbf8; }}
 .nowrap {{ white-space:nowrap; }} .muted {{ color:var(--muted); }} .strong {{ font-weight:600; }}
-.count-line {{ font-size:13px; color:var(--muted); margin:8px 2px 0; }}
-.dec {{ display:grid; grid-template-columns:34px 1fr auto; gap:12px; padding:14px 16px; border:1px solid var(--line); border-radius:10px; margin:0 0 10px; }}
-.dec-n {{ width:28px; height:28px; border-radius:50%; background:var(--crimson); color:#fff; font-weight:700; display:grid; place-items:center; font-size:13px; }}
-.dec-t {{ font-weight:700; }} .dec p {{ margin:3px 0 0; color:#44444c; }}
-.who {{ font-weight:600; color:var(--navy); white-space:nowrap; font-size:14px; }}
-.tree {{ columns:3 300px; column-gap:22px; }}
-.branch {{ break-inside:avoid; margin:0 0 18px; border-left:3px solid var(--gold); padding-left:12px; }}
-.area {{ font-weight:700; color:var(--navy); }} .count {{ color:var(--crimson); font-size:12px; font-weight:600; margin-left:8px; }}
-.branch ol {{ list-style:none; margin:6px 0 0; padding:0; }}
-.branch li {{ display:grid; grid-template-columns:76px 1fr; gap:6px; font-size:14px; padding:2px 0; }}
-.branch li:last-child span:last-child {{ font-weight:700; }}
-.td {{ color:var(--muted); }}
-footer {{ color:var(--muted); font-size:13px; border-top:1px solid var(--line); padding:16px 0 30px; }}
-@media (max-width:640px) {{ .dec {{ grid-template-columns:28px 1fr; }} .who {{ grid-column:2; }} }}
+.count-line {{ font-size:13px; color:var(--muted); margin:10px 2px 0; }}
+
+.dec {{ display:grid; grid-template-columns:40px 1fr auto; gap:14px; align-items:start; padding:16px 18px; background:#fff;
+  border:1px solid var(--line); border-left:3px solid var(--crimson); border-radius:10px; margin:0 0 10px; }}
+.dec-n {{ font-family:"Archivo",sans-serif; font-size:24px; font-weight:300; color:var(--gold); line-height:1.1; }}
+.dec-t {{ font-weight:600; }} .dec p {{ margin:4px 0 0; color:#4a4a52; }}
+.who {{ font-family:"Archivo",sans-serif; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--crimson);
+  white-space:nowrap; border:1px solid rgba(155,27,46,.3); border-radius:999px; padding:4px 11px; }}
+
+/* Change map: each area reads left to right, oldest to live now */
+.howto {{ display:flex; align-items:center; gap:10px; color:var(--muted); font-size:13px; margin:14px 0 22px; }}
+.howto .arrow {{ flex:0 0 60px; height:1px; background:var(--gold); position:relative; }}
+.howto .arrow::after {{ content:""; position:absolute; right:-1px; top:-3px; border:3.5px solid transparent; border-left:6px solid var(--gold); }}
+.lane {{ background:#fff; border:1px solid var(--line); border-radius:12px; padding:18px 20px 20px; margin:0 0 14px; }}
+.lane-head {{ display:flex; align-items:baseline; gap:12px; margin:0 0 14px; }}
+.lane-head h3 {{ margin:0; font-size:18px; }}
+.lane-count {{ color:var(--crimson); font-size:12px; font-weight:600; }}
+.steps {{ list-style:none; margin:0; padding:0 0 4px; display:flex; gap:34px; overflow-x:auto; }}
+.step {{ position:relative; flex:1 1 0; min-width:150px; max-width:260px; border:1px solid var(--line); border-radius:10px; padding:11px 13px; background:var(--paper); }}
+.step:not(:last-child)::after {{ content:""; position:absolute; top:50%; right:-27px; width:20px; height:1px; background:var(--gold); }}
+.step:not(:last-child)::before {{ content:""; position:absolute; top:calc(50% - 4px); right:-28px; border:4px solid transparent; border-left:6px solid var(--gold); }}
+.step-date {{ font-family:"Archivo",sans-serif; font-size:10.5px; letter-spacing:.2em; text-transform:uppercase; color:var(--gold); font-weight:600; }}
+.step-text {{ font-size:13.5px; margin-top:4px; color:#3d3d45; }}
+.step.now {{ background:var(--stage); border-color:var(--stage); color:#fff;
+  background-image:radial-gradient(ellipse 90% 70% at 50% 0%,rgba(240,180,90,.22),transparent 72%); }}
+.step.now .step-text {{ color:#fff; font-weight:500; }} .step.now .step-date {{ color:var(--gold-lt); }}
+.now-tag {{ display:inline-block; margin-top:8px; font-family:"Archivo",sans-serif; font-size:10px; letter-spacing:.2em; text-transform:uppercase;
+  color:var(--stage); background:var(--gold-lt); border-radius:999px; padding:2px 9px; font-weight:600; }}
+
+footer {{ color:var(--muted); font-size:13px; text-align:center; padding:26px 0 36px; border-top:1px solid var(--line); }}
+@media (max-width:640px) {{
+  .dec {{ grid-template-columns:30px 1fr; }} .who {{ grid-column:2; justify-self:start; }}
+  .steps {{ flex-direction:column; gap:14px; overflow:visible; }} .step {{ max-width:none; }}
+  .howto .arrow {{ display:none; }}
+  .step:not(:last-child)::after {{ top:auto; bottom:-12px; right:auto; left:24px; width:1px; height:10px; }}
+  .step:not(:last-child)::before {{ top:auto; bottom:-17px; right:auto; left:20px; border:4px solid transparent; border-top:6px solid var(--gold); }}
+}}
 </style></head><body>
-<header class=top><div class=wrap>
-  <h1>LVTA Website: Project Tracker</h1>
-  <p class=sub>Las Vegas Theatre Alliance &middot; Last updated {UPDATED} &middot; Staging site: <a href="{STAGING}" target=_blank rel=noopener>{STAGING.replace('https://', '')}</a></p>
-  <nav class=tabs>
+<header class=stage><div class=wrap>
+  <div class=brandbar>
+    <img src="data:image/png;base64,{LOGO}" alt="Las Vegas Theatre Alliance">
+    <a class="site label" href="{STAGING}" target=_blank rel=noopener>View the staging site</a>
+  </div>
+  <div class=hero>
+    <div class=label>Las Vegas Theatre Alliance &middot; Website</div>
+    <h1>Project Tracker</h1>
+    <div class=ornament aria-hidden=true><i></i><b></b><i></i></div>
+    <p>Last updated {UPDATED}</p>
+  </div>
+  <nav class="tabs label">
     <a href="#overview">Overview</a><a href="#work">Completed work</a><a href="#decisions">Needs a decision ({len(DECISIONS)})</a>
     <a href="#scope">Scope (SOW)</a><a href="#map">Change map</a>
   </nav>
-</div></header>
+</div><div class=floor></div></header>
 <main class=wrap>
 
-<section class=tab id=overview>
+<section class=tab id=tab-overview>
   <div class=stats>{stats}</div>
   <div class=grid2>
     <div class=box>
@@ -141,33 +223,33 @@ footer {{ color:var(--muted); font-size:13px; border-top:1px solid var(--line); 
       </div>
       <div class=key><span><i class=in></i>{scounts[IN]} in the SOW</span><span><i class=rev></i>{scounts[REV]} revisions after delivery</span><span><i class=out></i>{scounts[OUT]} beyond the SOW</span></div>
     </div>
-    <div class=box>
+    <div class="box dark">
       <h3>Built and ready, hidden for the fundraising launch</h3>
-      <p class=muted style="margin:0 0 8px">One switch brings all of this back when LVTA is ready:</p>
+      <p class=muted style="margin:0 0 10px">One switch brings all of this back when LVTA is ready:</p>
       <ul>{hidden}</ul>
     </div>
   </div>
 </section>
 
-<section class=tab id=work>
-  <h2>Completed work</h2>
-  <p class=lead>Everything delivered since the project started, newest first. "PR" items are reviewed changes on GitHub; October items went in before pull requests were set up.</p>
-  <div class=filters>Status: <button class=on data-status=all>All <span>{len(WORK)}</span></button>{status_filters}</div>
-  <div class=filters>Scope: <button class=on data-scope=all>All <span>{len(WORK)}</span></button>{scope_filters}</div>
+<section class=tab id=tab-work>
+  <div class=sec-head><div class=label>Delivered</div><h2>Completed work</h2>
+  <p class=lead>Everything delivered since the project started, newest first. "PR" items are reviewed changes on GitHub; October items went in before pull requests were set up.</p></div>
+  <div class=filters><span class=label>Status</span><button class=on data-status=all>All <span>{len(WORK)}</span></button>{status_filters}</div>
+  <div class=filters><span class=label>Scope</span><button class=on data-scope=all>All <span>{len(WORK)}</span></button>{scope_filters}</div>
   <input class=search type=search placeholder="Search the work" aria-label="Search the work">
   <div class=table><table><thead><tr><th>Date</th><th>Ref</th><th>Area</th><th>Delivered</th><th>Status</th><th>Scope</th></tr></thead><tbody>{work_rows}</tbody></table></div>
   <p class=count-line id=shown></p>
 </section>
 
-<section class=tab id=decisions>
-  <h2>Needs a decision or action</h2>
-  <p class=lead>Open items before launch. Items 1 and 2 are Givebutter settings (Gary); the rest are board decisions.</p>
+<section class=tab id=tab-decisions>
+  <div class=sec-head><div class=label>Before launch</div><h2>Needs a decision or action</h2>
+  <p class=lead>Open items before launch. Items 1 and 2 are Givebutter settings (Gary); the rest are board decisions.</p></div>
   {dec_cards}
 </section>
 
-<section class=tab id=scope>
-  <h2>Statement of Work</h2>
-  <p class=lead>The SOW (October 5, 2026) estimated 54 hours across four phases, including an 8-hour allowance for content revisions. Out-of-scope work was to be handled as a separate SOW or change order.</p>
+<section class=tab id=tab-scope>
+  <div class=sec-head><div class=label>Scope</div><h2>Statement of Work</h2>
+  <p class=lead>The SOW (October 5, 2026) estimated 54 hours across four phases, including an 8-hour allowance for content revisions. Out-of-scope work was to be handled as a separate SOW or change order.</p></div>
   <div class=grid2>
     <div class=box><h3>Still to do from the SOW</h3><ul>{sow_todo}</ul></div>
     <div class=box><h3>Delivered beyond the SOW</h3><ul>{sow_out}</ul>
@@ -175,27 +257,29 @@ footer {{ color:var(--muted); font-size:13px; border-top:1px solid var(--line); 
   </div>
 </section>
 
-<section class=tab id=map>
-  <h2>Change map</h2>
-  <p class=lead>Each part of the site with every version it has been through, oldest first. The bold line is what's live today.</p>
+<section class=tab id=tab-map>
+  <div class=sec-head><div class=label>How the site evolved</div><h2>Change map</h2>
+  <p class=lead>Every version each part of the site has been through, from the first build to what's live today.</p></div>
+  <div class=howto><span>Oldest</span><span class=arrow></span><span>Live now</span></div>
   <div class=tree>{tree}</div>
 </section>
 
 <footer>Sources: the GitHub history of LVTA-Development/lvta-website (PRs #1 to #23 and the October commits before them) and the project's request history.</footer>
 </main>
 <script>
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 (function () {{
   var tabs = document.querySelectorAll("nav.tabs a"), secs = document.querySelectorAll("section.tab");
   function show() {{
     var id = (location.hash || "#overview").slice(1);
-    if (!document.getElementById(id)) id = "overview";
-    secs.forEach(function (s) {{ s.classList.toggle("on", s.id === id); }});
+    if (!document.getElementById("tab-" + id)) id = "overview";
+    secs.forEach(function (s) {{ s.classList.toggle("on", s.id === "tab-" + id); }});
     tabs.forEach(function (a) {{ a.classList.toggle("on", a.getAttribute("href") === "#" + id); }});
-    window.scrollTo(0, 0);
+    setTimeout(function () {{ window.scrollTo(0, 0); }}, 0);
   }}
   window.addEventListener("hashchange", show); show();
 
-  var rows = document.querySelectorAll("#work tbody tr"), q = document.querySelector("input.search");
+  var rows = document.querySelectorAll("#tab-work tbody tr"), q = document.querySelector("input.search");
   var f = {{ status: "all", scope: "all" }};
   function apply() {{
     var t = q.value.toLowerCase(), n = 0;
