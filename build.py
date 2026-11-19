@@ -11,7 +11,7 @@ import html, json, os, sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "..", "report"))
 from data import (  # noqa: E402
-    WORK, DECISIONS, TREE, HIDDEN_LIST, STATS, SOW_TODO, SOW_OUT,
+    WORK, DECISIONS, TREE, HIDDEN_LIST, STATS, SOW_TODO, SOW_OUT, COMMITS_BY_DAY,
     LIVE, HIDDEN, ADMIN, BEHIND, OLD, IN, REV, OUT,
 )
 
@@ -56,6 +56,53 @@ def lane(area, versions):
             f"<ol class=steps>{''.join(steps)}</ol></div>")
 
 tree = "".join(lane(a, v) for a, v in TREE)
+import datetime as dt
+from collections import defaultdict
+
+MONTH_N = {"Oct": 10, "Nov": 11, "Dec": 12}
+work_by_day = defaultdict(list)
+for d, r, area, what, st, sc in WORK:
+    mon, day = d.split()
+    work_by_day[dt.date(2026, MONTH_N[mon], int(day))].append((area, what, st))
+active = {dt.date.fromisoformat(k): v for k, v in COMMITS_BY_DAY.items()}
+days = sorted(set(active) | set(work_by_day))
+TODAY = max(days)
+
+def level(n):
+    return 0 if n == 0 else 1 if n <= 2 else 2 if n <= 5 else 3 if n <= 10 else 4
+
+def month_grid(year, month):
+    first = dt.date(year, month, 1)
+    nxt = dt.date(year + (month == 12), month % 12 + 1, 1)
+    cells = ["<div class=dow>" + x + "</div>" for x in ("S", "M", "T", "W", "T", "F", "S")]
+    cells += ["<div class='day pad'></div>"] * ((first.weekday() + 1) % 7)
+    d = first
+    while d < nxt:
+        n = active.get(d, 0)
+        items = work_by_day.get(d, [])
+        old = any(st == OLD for _, _, st in items)
+        on = n or items
+        order = days.index(d) if d in days else 0
+        detail = ""
+        if on:
+            label = d.strftime("%A, %B %-d")
+            parts = [f"<div class=pop-d>{e(label)}</div>"]
+            if n:
+                parts.append(f"<div class=pop-n>{n} code change{'s' if n > 1 else ''}</div>")
+            parts += [f"<div class=pop-i><b>{e(a)}</b> {e(w)}</div>" for a, w, _ in items[:4]]
+            if len(items) > 4:
+                parts.append(f"<div class=pop-n>+ {len(items) - 4} more</div>")
+            detail = "<div class=pop>" + "".join(parts) + "</div>"
+        cls = f"day l{level(n)}" + (" on" if on else "") + (" old" if old else "") + (" weekend" if d.weekday() >= 5 else "") + (" today" if d == TODAY else "")
+        attr = f" tabindex=0 style='--i:{order}'" if on else ""
+        cells.append(f"<div class='{cls}'{attr}><span>{d.day}</span>{detail}</div>")
+        d += dt.timedelta(days=1)
+    return (f"<div class=month><div class='label month-name'>{first.strftime('%B %Y')}</div>"
+            f"<div class=mgrid>{''.join(cells)}</div></div>")
+
+calendar = month_grid(2026, 10) + month_grid(2026, 11)
+weekend_days = sum(1 for d in days if d.weekday() >= 5)
+busiest = max(active, key=active.get)
 hidden = "".join(f"<li><b>{e(a)}</b> {e(b)}</li>" for a, b in HIDDEN_LIST)
 sow_todo = "".join(f"<li><b>{e(a)}</b> {e(b)}</li>" for a, b in SOW_TODO)
 sow_out = "".join(f"<li>{e(x)}</li>" for x in SOW_OUT)
@@ -178,6 +225,50 @@ tr:nth-child(even) td {{ background:#fcfbf8; }}
 .now-tag {{ display:inline-block; margin-top:8px; font-family:"Archivo",sans-serif; font-size:10px; letter-spacing:.2em; text-transform:uppercase;
   color:var(--stage); background:var(--gold-lt); border-radius:999px; padding:2px 9px; font-weight:600; }}
 
+/* Work calendar */
+.cal {{ margin:0 0 22px; }}
+.cal-head {{ display:flex; justify-content:space-between; gap:16px; align-items:flex-start; }}
+.cal-head p {{ margin:0; max-width:760px; font-size:14px; }}
+.replay {{ font-family:"Archivo",sans-serif; font-size:11px; letter-spacing:.2em; text-transform:uppercase; color:var(--cream);
+  background:none; border:1px solid rgba(184,137,59,.55); border-radius:999px; padding:7px 14px; cursor:pointer; white-space:nowrap; }}
+.replay:hover {{ background:rgba(184,137,59,.15); }}
+.months {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:26px 40px; margin:20px 0 14px; }}
+.month-name {{ color:var(--gold-lt); margin:0 0 10px; }}
+.mgrid {{ display:grid; grid-template-columns:repeat(7,1fr); gap:6px; }}
+.dow {{ font-family:"Archivo",sans-serif; font-size:10px; letter-spacing:.15em; color:rgba(255,255,255,.35); text-align:center; }}
+.day {{ position:relative; aspect-ratio:1; border-radius:7px; background:rgba(255,255,255,.04); display:flex; align-items:flex-start;
+  justify-content:flex-end; padding:5px 6px; font-size:11px; color:rgba(255,255,255,.3); }}
+.day.pad {{ background:none; }}
+.day.weekend:not(.on) {{ background:rgba(255,255,255,.025); }}
+.day.on {{ cursor:pointer; color:#fff; font-weight:600; outline:none; }}
+.day.l1 {{ background:rgba(240,180,90,.28); }} .day.l2 {{ background:rgba(240,180,90,.5); }}
+.day.l3 {{ background:rgba(240,180,90,.75); color:var(--stage); }} .day.l4 {{ background:var(--gold-lt); color:var(--stage); box-shadow:0 0 22px rgba(240,180,90,.6); }}
+.day.on.l0 {{ background:rgba(255,255,255,.08); }}
+.day.old {{ box-shadow:inset 0 0 0 2px #c58be0; }}
+.day.l4.old, .day.l3.old {{ box-shadow:inset 0 0 0 2px #c58be0, 0 0 22px rgba(240,180,90,.5); }}
+.day.today::after {{ content:""; position:absolute; left:6px; bottom:6px; width:5px; height:5px; border-radius:50%; background:var(--crimson); box-shadow:0 0 0 2px #fff; }}
+.cal.play .day.on {{ animation:light .55s cubic-bezier(.2,.7,.2,1) both; animation-delay:calc(var(--i) * 90ms + 150ms); }}
+@keyframes light {{ from {{ opacity:0; transform:scale(.6); filter:brightness(2.2); }} 60% {{ opacity:1; transform:scale(1.08); }} to {{ opacity:1; transform:scale(1); filter:none; }} }}
+.pop {{ display:none; position:absolute; z-index:5; bottom:calc(100% + 8px); left:50%; transform:translateX(-50%); width:270px;
+  background:#fff; color:var(--ink); border-radius:10px; padding:11px 13px; box-shadow:0 14px 40px rgba(0,0,0,.45); font-weight:400; text-align:left; cursor:auto; }}
+.pop::after {{ content:""; position:absolute; top:100%; left:50%; margin-left:-6px; border:6px solid transparent; border-top-color:#fff; }}
+.day:hover .pop, .day:focus .pop, .day:focus-within .pop {{ display:block; }}
+.mgrid > .day:nth-child(7n+1) .pop, .mgrid > .day:nth-child(7n+2) .pop {{ left:0; transform:none; }}
+.mgrid > .day:nth-child(7n+1) .pop::after, .mgrid > .day:nth-child(7n+2) .pop::after {{ left:18px; }}
+.mgrid > .day:nth-child(7n) .pop, .mgrid > .day:nth-child(7n+6) .pop {{ left:auto; right:0; transform:none; }}
+.mgrid > .day:nth-child(7n) .pop::after, .mgrid > .day:nth-child(7n+6) .pop::after {{ left:auto; right:12px; }}
+.pop-d {{ font-family:"Archivo",sans-serif; font-weight:600; font-size:13px; }}
+.pop-n {{ color:var(--crimson); font-size:12px; font-weight:600; margin:2px 0 4px; }}
+.pop-i {{ font-size:12.5px; line-height:1.4; margin:4px 0 0; color:#3d3d45; }}
+.box.dark .pop b {{ color:var(--crimson); }}
+.cal-key {{ display:flex; align-items:center; flex-wrap:wrap; gap:6px; font-size:12px; color:rgba(255,255,255,.55); }}
+.cal-key i {{ display:inline-block; width:14px; height:14px; border-radius:4px; }}
+.cal-key .l1 {{ background:rgba(240,180,90,.28); }} .cal-key .l2 {{ background:rgba(240,180,90,.5); }}
+.cal-key .l3 {{ background:rgba(240,180,90,.75); }} .cal-key .l4 {{ background:var(--gold-lt); }}
+.cal-key .old-key {{ box-shadow:inset 0 0 0 2px #c58be0; }}
+.cal-key .sep {{ width:16px; }}
+.scope-note {{ font-size:13px; color:var(--muted); margin:6px 0 4px; max-width:860px; }}
+@media (prefers-reduced-motion: reduce) {{ .cal.play .day.on {{ animation:none; }} }}
 footer {{ color:var(--muted); font-size:13px; text-align:center; padding:26px 0 36px; border-top:1px solid var(--line); }}
 @media (max-width:640px) {{
   .dec {{ grid-template-columns:30px 1fr; }} .who {{ grid-column:2; justify-self:start; }}
@@ -207,6 +298,16 @@ footer {{ color:var(--muted); font-size:13px; text-align:center; padding:26px 0 
 
 <section class=tab id=tab-overview>
   <div class=stats>{stats}</div>
+  <div class="box dark cal" id=calendar>
+    <div class=cal-head>
+      <div><h3>When the work happened</h3>
+        <p class=muted>{len(days)} working days from {days[0].strftime('%B %-d')} to {TODAY.strftime('%B %-d')}, {weekend_days} of them on a weekend. The brighter the day, the more changes went in; the busiest was {busiest.strftime('%B %-d')} with {active[busiest]}. Hover or tap a day to see what was done.</p></div>
+      <button class=replay type=button>Replay</button>
+    </div>
+    <div class=months>{calendar}</div>
+    <div class=cal-key><span>Fewer changes</span><i class=l1></i><i class=l2></i><i class=l3></i><i class=l4></i><span>More</span>
+      <span class=sep></span><i class='old-key'></i><span>Fixes on the old lvta.org site</span></div>
+  </div>
   <div class=grid2>
     <div class=box>
       <h3>Where things stand</h3>
@@ -221,7 +322,7 @@ footer {{ color:var(--muted); font-size:13px; text-align:center; padding:26px 0 
       <div class=bars>
         <span class=in style="flex:{scounts[IN]}"></span><span class=rev style="flex:{scounts[REV]}"></span><span class=out style="flex:{scounts[OUT]}"></span>
       </div>
-      <div class=key><span><i class=in></i>{scounts[IN]} in the SOW</span><span><i class=rev></i>{scounts[REV]} revisions after delivery</span><span><i class=out></i>{scounts[OUT]} beyond the SOW</span></div>
+      <div class=key><span><i class=in></i>{scounts[IN]} in the SOW</span><span><i class=rev></i>{scounts[REV]} revisions to work already built</span><span><i class=out></i>{scounts[OUT]} beyond the SOW</span></div>
     </div>
     <div class="box dark">
       <h3>Built and ready, hidden for the fundraising launch</h3>
@@ -236,6 +337,7 @@ footer {{ color:var(--muted); font-size:13px; text-align:center; padding:26px 0 
   <p class=lead>Everything delivered since the project started, newest first. "PR" items are reviewed changes on GitHub; October items went in before pull requests were set up.</p></div>
   <div class=filters><span class=label>Status</span><button class=on data-status=all>All <span>{len(WORK)}</span></button>{status_filters}</div>
   <div class=filters><span class=label>Scope</span><button class=on data-scope=all>All <span>{len(WORK)}</span></button>{scope_filters}</div>
+  <p class=scope-note><b>In SOW</b> is listed in the Statement of Work. <b>Revision</b> is a change to something that was already built and shown, such as resizing the logo again or re-editing a video; the SOW allows 8 hours of these. <b>Beyond SOW</b> is work the SOW doesn't cover.</p>
   <input class=search type=search placeholder="Search the work" aria-label="Search the work">
   <div class=table><table><thead><tr><th>Date</th><th>Ref</th><th>Area</th><th>Delivered</th><th>Status</th><th>Scope</th></tr></thead><tbody>{work_rows}</tbody></table></div>
   <p class=count-line id=shown></p>
@@ -253,7 +355,7 @@ footer {{ color:var(--muted); font-size:13px; text-align:center; padding:26px 0 
   <div class=grid2>
     <div class=box><h3>Still to do from the SOW</h3><ul>{sow_todo}</ul></div>
     <div class=box><h3>Delivered beyond the SOW</h3><ul>{sow_out}</ul>
-      <p class=muted style="margin:10px 0 0">Plus {scounts[REV]} revisions requested after delivery. <a href="#work" data-goto-scope=rev>See them in Completed work</a>.</p></div>
+      <p class=muted style="margin:10px 0 0">Plus {scounts[REV]} revisions: changes to work that was already built and shown. <a href="#work" data-goto-scope=rev>See them in Completed work</a>.</p></div>
   </div>
 </section>
 
@@ -268,7 +370,13 @@ footer {{ color:var(--muted); font-size:13px; text-align:center; padding:26px 0 
 </main>
 <script>
 if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+var cal = document.getElementById("calendar");
+function play() {{
+  if (!cal) return;
+  cal.classList.remove("play"); void cal.offsetWidth; cal.classList.add("play");
+}}
 (function () {{
+  document.querySelector(".replay").addEventListener("click", play);
   var tabs = document.querySelectorAll("nav.tabs a"), secs = document.querySelectorAll("section.tab");
   function show() {{
     var id = (location.hash || "#overview").slice(1);
@@ -276,6 +384,7 @@ if ("scrollRestoration" in history) history.scrollRestoration = "manual";
     secs.forEach(function (s) {{ s.classList.toggle("on", s.id === "tab-" + id); }});
     tabs.forEach(function (a) {{ a.classList.toggle("on", a.getAttribute("href") === "#" + id); }});
     setTimeout(function () {{ window.scrollTo(0, 0); }}, 0);
+    if (id === "overview") play();
   }}
   window.addEventListener("hashchange", show); show();
 
