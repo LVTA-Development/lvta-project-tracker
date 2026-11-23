@@ -15,7 +15,7 @@ from data import (  # noqa: E402
     LIVE, HIDDEN, ADMIN, BEHIND, OLD, IN, REV, OUT,
 )
 
-UPDATED = "November 19, 2026"
+UPDATED = "November 23, 2026"
 SITE = os.path.join(HERE, "..", "lvta-website")
 b64 = lambda f: __import__("base64").b64encode(open(os.path.join(SITE, f), "rb").read()).decode()
 FONT_DISPLAY = b64("app/fonts/archivo-latin.woff2")
