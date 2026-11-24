@@ -80,6 +80,9 @@ def month_grid(year, month):
     while d < nxt:
         n = active.get(d, 0)
         items = work_by_day.get(d, [])
+        # A day with only non-code work (deploys, database changes, work on
+        # other sites) is lit by how many items were delivered that day.
+        bright = n if n else len(items)
         old = any(st == OLD for _, _, st in items)
         on = n or items
         order = days.index(d) if d in days else 0
@@ -89,11 +92,13 @@ def month_grid(year, month):
             parts = [f"<div class=pop-d>{e(label)}</div>"]
             if n:
                 parts.append(f"<div class=pop-n>{n} code change{'s' if n > 1 else ''}</div>")
+            elif items:
+                parts.append(f"<div class=pop-n>{len(items)} update{'s' if len(items) > 1 else ''}</div>")
             parts += [f"<div class=pop-i><b>{e(a)}</b> {e(w)}</div>" for a, w, _ in items[:4]]
             if len(items) > 4:
                 parts.append(f"<div class=pop-n>+ {len(items) - 4} more</div>")
             detail = "<div class=pop>" + "".join(parts) + "</div>"
-        cls = f"day l{level(n)}" + (" on" if on else "") + (" old" if old else "") + (" weekend" if d.weekday() >= 5 else "") + (" today" if d == TODAY else "")
+        cls = f"day l{level(bright)}" + (" on" if on else "") + (" old" if old else "") + (" weekend" if d.weekday() >= 5 else "") + (" today" if d == TODAY else "")
         attr = f" tabindex=0 style='--i:{order}'" if on else ""
         cells.append(f"<div class='{cls}'{attr}><span>{d.day}</span>{detail}</div>")
         d += dt.timedelta(days=1)
